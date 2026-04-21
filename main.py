@@ -535,7 +535,7 @@ def batch_update_cloudflare_dns(ip_list, ip_info=None, full_bw_results=None, tar
     dns_ip_list = unique_ips
     dns_node_list = unique_nodes
 
-    # ===== 修改区域：DNS更新前打印格式改为带速度和延迟 =====
+    # ===== DNS更新前打印格式改为带速度和延迟 =====
     print(f"\n准备将以下 {len(dns_ip_list)} 个 IP 批量更新到 Cloudflare DNS:")
     speed_map = {}
     if full_bw_results:
@@ -742,20 +742,28 @@ def main():
     # 构建延迟映射字典，方便后续查找
     latency_map = {node: lat for node, lat, _, _ in results}
 
-    # 4. 选出候选节点
+    # ===== 修改区域1：分国家模式候选池构建（设想 C：公平分配名额） =====
     if USE_GLOBAL_MODE:
         candidates = [node for node, _, _, _ in results[:BANDWIDTH_CANDIDATES]]
-        # ===== 修改区域：不再打印详细节点列表，只显示数量 =====
         print(f"\nTCP 最优前 {len(candidates)} 个节点进入候选池。")
-        # =================================================
     else:
-        country_best = {}
+        # 按国家分组
+        country_nodes = defaultdict(list)
         for node_str, lat, country, succ in results:
-            if country not in country_best:
-                country_best[country] = (node_str, lat, succ)
-        country_list = sorted(country_best.values(), key=lambda x: (-x[2], x[1]))
-        candidates = [node for node, _, _ in country_list[:BANDWIDTH_CANDIDATES]]
-        print(f"\n各国家最优节点共 {len(country_list)} 个，取前 {len(candidates)} 个进入候选池。")
+            country_nodes[country].append((node_str, lat, succ))
+        
+        total_countries = len(country_nodes)
+        # 每个国家分配的基础候选名额 = BANDWIDTH_CANDIDATES // 国家数，至少1个
+        base_limit = max(1, BANDWIDTH_CANDIDATES // total_countries)
+        candidates = []
+        for country, nodes in country_nodes.items():
+            nodes_sorted = sorted(nodes, key=lambda x: (-x[2], x[1]))
+            # 每个国家最多取 base_limit 个，但不能超过该国实际通过数
+            limit = min(len(nodes_sorted), base_limit)
+            for node_str, lat, succ in nodes_sorted[:limit]:
+                candidates.append(node_str)
+        print(f"\n各国家候选池分配：共 {total_countries} 个国家，每国最多 {base_limit} 个候选，总计 {len(candidates)} 个节点进入候选池。")
+    # =============================================================
 
     if not candidates:
         print("没有候选节点，退出。")
@@ -784,7 +792,12 @@ def main():
         if USE_GLOBAL_MODE:
             final_selected = [node for node, _, _, _ in results[:GLOBAL_TOP_N]]
         else:
-            final_selected = [node for node, _, _ in country_list[:PER_COUNTRY_TOP_N]]
+            # 降级时按国家各取 PER_COUNTRY_TOP_N 个 TCP 最优节点
+            final_selected = []
+            for country, nodes in country_nodes.items():
+                nodes_sorted = sorted(nodes, key=lambda x: (-x[2], x[1]))
+                for node_str, _, _ in nodes_sorted[:PER_COUNTRY_TOP_N]:
+                    final_selected.append(node_str)
         pure_bw_results = []  # 用于DNS降级
     else:
         # 6.5 纯净度过滤（带重试）
@@ -796,13 +809,27 @@ def main():
             send_wxpusher_notification(content=msg, summary="纯净度检测失败")
             sys.exit(1)
 
-        # 7. 确定最终节点
+        # ===== 修改区域2：最终输出按国家独立取前 PER_COUNTRY_TOP_N 个 =====
         if USE_GLOBAL_MODE:
             final_selected = [node for node, _ in pure_bw_results[:GLOBAL_TOP_N]]
         else:
-            final_selected = [node for node, _ in pure_bw_results[:PER_COUNTRY_TOP_N]]
+            # 按国家分组测速结果
+            country_speed_nodes = defaultdict(list)
+            for node, speed in pure_bw_results:
+                country = node.split('#')[-1] if '#' in node else ''
+                if country:
+                    country_speed_nodes[country].append((node, speed))
+            final_selected = []
+            for country, nodes in country_speed_nodes.items():
+                # 取该国速度前 PER_COUNTRY_TOP_N 个节点
+                for node, speed in nodes[:PER_COUNTRY_TOP_N]:
+                    final_selected.append(node)
+            # 可选：按全局速度二次排序，使输出列表更直观
+            speed_map = {node: speed for node, speed in pure_bw_results}
+            final_selected.sort(key=lambda x: speed_map.get(x, 0), reverse=True)
+        # ================================================================
 
-        # ===== 修改区域：最终优选节点打印带速度和延迟 =====
+        # ===== 最终优选节点打印带速度和延迟 =====
         print("\n================ 最终优选节点（基于带宽测速 + 纯净度过滤）================")
         speed_map = {node: speed for node, speed in pure_bw_results}
         for i, node in enumerate(final_selected, 1):
@@ -812,7 +839,7 @@ def main():
                 print(f"{i}. {node} 速度 {speed:.2f} Mbps 延迟 {lat_sec*1000:.2f} ms")
             else:
                 print(f"{i}. {node} 速度 {speed:.2f} Mbps")
-        # =================================================
+        # ======================================
 
     # 8. 保存结果
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
