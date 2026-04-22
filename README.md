@@ -498,6 +498,25 @@ git branch -M $(git remote show origin | grep "HEAD branch" | cut -d " " -f5) 2>
 
 ---
 
+> [!WARNING]
+> **关于私有仓库的特别提醒**
+> 
+> 如果您将仓库设置为 **Private（私有）**，则通过 Raw 链接访问 `ip.txt` 时必须在 URL 后附加 `?token=你的令牌` 参数才能获取内容，例如：
+> ```
+> https://raw.githubusercontent.com/用户名/仓库名/分支名/ip.txt?token=xxxxxx
+> ```
+> 但请注意，**部分代理工具或订阅解析器可能无法正确处理带 Token 参数的 URL**，原因包括：
+> - 不支持自定义请求头（GitHub 要求完整的 User-Agent 等头信息）
+> - 无法解析带查询参数的链接
+> - 防火墙或网络环境限制
+> 
+> **因此，如果您希望将 `ip.txt` 作为订阅链接供代理工具使用，强烈建议将仓库设为 Public（公开）。**
+> 
+> 公开仓库的 Raw 链接无需 Token 即可访问，兼容性最佳：
+> ```
+> https://raw.githubusercontent.com/用户名/仓库名/分支名/ip.txt
+> ```
+
 ### 验证与订阅
 
 推送成功后，访问 `https://raw.githubusercontent.com/你的用户名/仓库名/refs/heads/分支名/ip.txt` 即可获取最新节点列表，供代理工具订阅使用。
