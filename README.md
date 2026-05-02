@@ -380,6 +380,20 @@ python3 main.py
 | `GITHUB_SYNC_RETRY_DELAY` | `int` | `3` | GitHub 推送重试间隔（秒） |
 | `GIT_SYNC_PROCESS_TIMEOUT` | `int` | `180` | Git 同步子进程最大运行时间（秒） |
 
+#### 广告植入参数（仅影响 `ip.txt` 内容）
+
+| 参数 | 类型 | 默认值 | 说明 |
+| :--- | :--- | :--- | :--- |
+| `AD_HEADER_ENABLED` | `boolean` | `false` | 是否在 `ip.txt` 头部插入自定义广告行 |
+| `AD_HEADER_LINES` | `array` | `["0.0.0.0:443#格式 或纯文本1", "0.0.0.0:443#格式 或纯文本2"]` | 头部广告内容列表（可填任意格式） |
+| `AD_FOOTER_ENABLED` | `boolean` | `false` | 是否在 `ip.txt` 尾部插入自定义广告行 |
+| `AD_FOOTER_LINES` | `array` | `["0.0.0.0:443#格式 或纯文本3", "0.0.0.0:443#格式 或纯文本4"]` | 尾部广告内容列表（可填任意格式） |
+| `AD_PERLINE_ENABLED` | `boolean` | `false` | 是否在每行节点末尾追加固定文本 |
+| `AD_PERLINE_TEXT` | `string` | `" 纯文本"` | 追加到每行节点末尾的文本 |
+
+> 💡 三个开关完全独立，头部/尾部可为多条，行尾为单条固定文本。  
+> 开启后只会改变 `ip.txt` 内容，不影响 Cloudflare DNS 更新（DNS 仍使用纯净节点列表）。
+
 </details>
 
 > 💡 **快速配置建议**  
