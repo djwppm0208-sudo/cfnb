@@ -305,7 +305,10 @@ def extract_country_code(label):
 
     # 2. 对每个 token 尝试提取中文名
     for token in tokens:
-        token_no_emoji = re.sub(r'[\U0001F1E6-\U0001F1FF]', '', token).strip()
+        # --- 新增清理步骤：移除 token 开头常见的非中文噪音 (数字、符号等) ---
+        token_cleaned = re.sub(r'^[\d\s\-_.|#]+', '', token)
+        # ----------------------------------------------------------------
+        token_no_emoji = re.sub(r'[\U0001F1E6-\U0001F1FF]', '', token_cleaned).strip()
         cn_match = re.match(r'^([\u4e00-\u9fff（）()]+)\d*$', token_no_emoji)
         if cn_match:
             cn_name = cn_match.group(1).strip()
